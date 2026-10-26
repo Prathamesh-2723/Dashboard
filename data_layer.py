@@ -1039,3 +1039,64 @@ def simulate_model_retrain() -> Dict[str, Any]:
         "features_retrained": 34
     }
 
+
+# =============================================================================
+# 13. SOC Authentication & User Profile Directory (RBAC)
+# =============================================================================
+
+USER_PROFILES: Dict[str, Dict[str, Any]] = {
+    "analyst": {
+        "username": "analyst",
+        "password": "analyst123",
+        "name": "Analyst Alex",
+        "role": "analyst",
+        "title": "Tier-2 SOC Analyst",
+        "badge_label": "User (SOC Analyst)",
+        "clearance": "Operational Triage • Masked IPs • Read-Only ML",
+        "icon": "🛡️",
+        "color": "#38BDF8",
+        "accessible_pages": 7
+    },
+    "admin": {
+        "username": "admin",
+        "password": "admin123",
+        "name": "Admin Sarah",
+        "role": "admin",
+        "title": "Lead Security / ML Engineer",
+        "badge_label": "Admin (Security Lead)",
+        "clearance": "Level-5 Clearance • Raw IPs • Governance Controls",
+        "icon": "🔑",
+        "color": "#F5A623",
+        "accessible_pages": 11
+    }
+}
+
+
+def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+    """
+    Validates user credentials against the local SOC directory.
+    Returns the user profile dict if valid, or None if invalid.
+    """
+    if not username or not password:
+        return None
+    
+    clean_user = str(username).strip().lower()
+    clean_pwd = str(password).strip()
+
+    for key, profile in USER_PROFILES.items():
+        if profile["username"] == clean_user and profile["password"] == clean_pwd:
+            return profile
+    return None
+
+
+def get_user_profile(role_or_username: str) -> Optional[Dict[str, Any]]:
+    """Retrieves profile details by username or role key."""
+    key = str(role_or_username).strip().lower()
+    if key in USER_PROFILES:
+        return USER_PROFILES[key]
+    for profile in USER_PROFILES.values():
+        if profile["username"] == key:
+            return profile
+    return None
+
+

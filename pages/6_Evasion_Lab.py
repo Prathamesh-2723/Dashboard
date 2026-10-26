@@ -32,7 +32,7 @@ def render_page():
                         To prevent dual-use risks and protect defense telemetry, this module is restricted to <strong>SOC Admin / ML Engineers</strong>.
                     </div>
                     <div style="margin-top: 0.7rem; font-size: 0.8rem; color: #94A3B8;">
-                        👉 Switch your operating profile to <strong>"Admin (Security Lead)"</strong> in the sidebar to unlock.
+                        👉 To access this module, please sign out from the sidebar and log in with the <strong>Admin Profile</strong> credentials (<code>admin</code> / <code>admin123</code>).
                     </div>
                 </div>
             </div>

@@ -71,7 +71,7 @@ def render_page():
                     </div>
                     <div style="margin-top: 0.8rem;">
                         <span style="font-size: 0.8rem; color: #94A3B8;">
-                            👉 To access this console, switch your active profile to <strong>"Admin (Security Lead)"</strong> using the profile selector at the top of the sidebar.
+                            👉 To access this console, please sign out from the sidebar and log in with the <strong>Admin Profile</strong> credentials (<code>admin</code> / <code>admin123</code>).
                         </span>
                     </div>
                 </div>
