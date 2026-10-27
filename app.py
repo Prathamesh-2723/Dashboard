@@ -6,7 +6,11 @@ Main Streamlit Application Controller & Role-Based Access Controller (RBAC)
 
 Features:
 - Separate Secure Authentication for User (SOC Analyst) and Admin (Security Lead)
-- Credential validation with preset demo profiles and 1-click fastpass
+- Persistent SQLite Database Integration with Salted Bcrypt Hashing
+- 15-Minute Account Lockout after 5 Failed Consecutive Attempts
+- Self-Service User Registration & Admin Approval Workflow
+- Password Recovery with Verification OTP Tokens
+- Fastpass 1-Click Demo Access for Live Presentations
 - Dynamic Role-Gated Multi-Page Navigation Structure
 - Dark "Security Operations" Visual Theme (#0B1220 navy, #121A2B cards)
 - Live SOC Security Audit Logging for Login / Logout / Access Events
@@ -16,10 +20,20 @@ Features:
 import os
 from datetime import datetime
 import streamlit as st
+import sys
+import importlib
+
+if "data_layer" in sys.modules:
+    importlib.reload(sys.modules["data_layer"])
+
 from data_layer import (
     authenticate_user,
+    authenticate_user_detailed,
     get_user_profile,
     log_audit_event,
+    register_user,
+    request_password_reset,
+    reset_password_with_token,
     USER_PROFILES
 )
 from components.badges import render_demo_banner, render_demo_tag
@@ -68,12 +82,14 @@ def render_login_gateway():
     col_spacer_l, col_main, col_spacer_r = st.columns([1, 2.4, 1])
 
     with col_main:
-        tab_user, tab_admin = st.tabs([
-            "🛡️ User Profile (SOC Analyst)",
-            "🔑 Admin Profile (Security Lead)"
+        tab_user, tab_admin, tab_register, tab_forgot = st.tabs([
+            "🛡️ Analyst Login",
+            "🔑 Admin Login",
+            "📝 Request Access",
+            "🔄 Forgot Password"
         ])
 
-        # ----------------- User (Analyst) Tab -----------------
+        # ----------------- 1. User (Analyst) Tab -----------------
         with tab_user:
             st.markdown("""
             <div style="background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
@@ -105,21 +121,30 @@ def render_login_gateway():
                 submit_analyst = st.form_submit_button("Sign In as SOC Analyst 🛡️", use_container_width=True, type="primary")
 
                 if submit_analyst:
-                    user_record = authenticate_user(u_user, u_pass)
-                    if user_record and user_record["role"] == "analyst":
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_role"] = user_record["role"]
-                        st.session_state["user_name"] = user_record["name"]
-                        st.session_state["user_profile"] = user_record
-                        st.session_state["login_time"] = datetime.now().strftime("%H:%M:%S")
-                        log_audit_event("AUTH_LOGIN_SUCCESS", target="SOC Gateway", details=f"User '{user_record['name']}' logged in successfully as [ANALYST]", status="Success")
-                        st.success("✅ Access Granted. Loading Analyst SOC environment...")
-                        st.rerun()
+                    auth_res = authenticate_user_detailed(u_user, u_pass)
+                    if auth_res["success"]:
+                        user_record = auth_res["user"]
+                        if user_record["role"] in ["analyst", "admin"]:
+                            st.session_state["authenticated"] = True
+                            st.session_state["user_role"] = user_record["role"]
+                            st.session_state["user_name"] = user_record["name"]
+                            st.session_state["user_profile"] = user_record
+                            st.session_state["login_time"] = datetime.now().strftime("%H:%M:%S")
+                            log_audit_event("AUTH_LOGIN_SUCCESS", target="SOC Gateway", details=f"User '{user_record['name']}' logged in successfully as [{user_record['role'].upper()}]", status="Success")
+                            st.success("✅ Access Granted. Loading SOC Analyst environment...")
+                            st.rerun()
+                    elif auth_res["status"] == "locked":
+                        st.error(f"🔒 {auth_res['message']}")
+                        log_audit_event("AUTH_LOGIN_BLOCKED_LOCKED", target="SOC Gateway", details=f"Account locked: '{u_user}'", status="Blocked")
+                    elif auth_res["status"] == "pending":
+                        st.warning(f"⏳ {auth_res['message']}")
+                    elif auth_res["status"] == "rejected":
+                        st.error(f"❌ {auth_res['message']}")
                     else:
-                        st.error("❌ Authentication Failed: Invalid credentials for the User profile.")
+                        st.error(f"❌ {auth_res['message']}")
                         log_audit_event("AUTH_LOGIN_FAILED", target="SOC Gateway", details=f"Failed login attempt for '{u_user}' (Analyst Gateway)", status="Blocked")
 
-        # ----------------- Admin (Lead) Tab -----------------
+        # ----------------- 2. Admin (Lead) Tab -----------------
         with tab_admin:
             st.markdown("""
             <div style="background: rgba(245, 166, 35, 0.06); border: 1px solid rgba(245, 166, 35, 0.25); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
@@ -150,19 +175,177 @@ def render_login_gateway():
                 submit_admin = st.form_submit_button("Sign In as Security Admin 🔑", use_container_width=True, type="primary")
 
                 if submit_admin:
-                    user_record = authenticate_user(a_user, a_pass)
-                    if user_record and user_record["role"] == "admin":
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_role"] = user_record["role"]
-                        st.session_state["user_name"] = user_record["name"]
-                        st.session_state["user_profile"] = user_record
-                        st.session_state["login_time"] = datetime.now().strftime("%H:%M:%S")
-                        log_audit_event("AUTH_LOGIN_SUCCESS", target="SOC Gateway", details=f"User '{user_record['name']}' logged in successfully as [ADMIN]", status="Success")
-                        st.success("✅ Level-5 Clearance Granted. Loading Admin Console...")
-                        st.rerun()
+                    auth_res = authenticate_user_detailed(a_user, a_pass)
+                    if auth_res["success"]:
+                        user_record = auth_res["user"]
+                        if user_record["role"] == "admin":
+                            st.session_state["authenticated"] = True
+                            st.session_state["user_role"] = user_record["role"]
+                            st.session_state["user_name"] = user_record["name"]
+                            st.session_state["user_profile"] = user_record
+                            st.session_state["login_time"] = datetime.now().strftime("%H:%M:%S")
+                            log_audit_event("AUTH_LOGIN_SUCCESS", target="SOC Gateway", details=f"User '{user_record['name']}' logged in successfully as [ADMIN]", status="Success")
+                            st.success("✅ Level-5 Clearance Granted. Loading Admin Console...")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ This account has Analyst permissions. Please sign in via the Analyst Login tab.")
+                    elif auth_res["status"] == "locked":
+                        st.error(f"🔒 {auth_res['message']}")
+                        log_audit_event("AUTH_LOGIN_BLOCKED_LOCKED", target="SOC Gateway", details=f"Account locked: '{a_user}'", status="Blocked")
+                    elif auth_res["status"] == "pending":
+                        st.warning(f"⏳ {auth_res['message']}")
+                    elif auth_res["status"] == "rejected":
+                        st.error(f"❌ {auth_res['message']}")
                     else:
-                        st.error("❌ Authentication Failed: Invalid credentials for the Admin profile.")
+                        st.error(f"❌ {auth_res['message']}")
                         log_audit_event("AUTH_LOGIN_FAILED", target="SOC Gateway", details=f"Failed login attempt for '{a_user}' (Admin Gateway)", status="Blocked")
+
+        # ----------------- 3. Request Access (Sign Up) Tab -----------------
+        with tab_register:
+            st.markdown("""
+            <div style="background: rgba(139, 92, 246, 0.06); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.1rem;">📝</span>
+                        <strong style="color: #A78BFA; font-size: 0.95rem;">New SOC Investigator Registration</strong>
+                    </div>
+                    <span style="font-size: 0.7rem; background: rgba(139, 92, 246, 0.2); color: #A78BFA; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 700;">SELF-SERVICE</span>
+                </div>
+                <div style="color: #CBD5E1; font-size: 0.82rem; line-height: 1.5;">
+                    Submit a credential request for SOC operations. New analyst registrations are verified and approved by <strong>Admin Sarah</strong> before access is granted.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.form("form_registration"):
+                r_name = st.text_input("Full Name *", placeholder="e.g. Jordan Lee", key="reg_name")
+                r_email = st.text_input("Corporate / SOC Email *", placeholder="e.g. jordan.lee@soc.internal", key="reg_email")
+                r_user = st.text_input("Desired Username *", placeholder="e.g. jlee_soc", key="reg_user")
+
+                c_r1, c_r2 = st.columns(2)
+                with c_r1:
+                    r_role = st.selectbox("Requested Operational Tier", ["Tier-2 SOC Analyst", "Admin (Lead / ML Engineer)"], key="reg_role")
+                with c_r2:
+                    r_just = st.text_input("Department / Justification", placeholder="e.g. Q4 Threat Intel Rotation", key="reg_just")
+
+                c_p1, c_p2 = st.columns(2)
+                with c_p1:
+                    r_pass = st.text_input("Password (min 6 chars) *", type="password", key="reg_pass")
+                with c_p2:
+                    r_pass_conf = st.text_input("Confirm Password *", type="password", key="reg_pass_conf")
+
+                submit_reg = st.form_submit_button("Submit Access Request 📝", use_container_width=True, type="primary")
+
+                if submit_reg:
+                    if not r_name or not r_email or not r_user or not r_pass:
+                        st.error("❌ Please complete all mandatory fields (*).")
+                    elif r_pass != r_pass_conf:
+                        st.error("❌ Passwords do not match. Please re-enter your password.")
+                    else:
+                        role_key = "admin" if "Admin" in r_role else "analyst"
+                        reg_res = register_user(
+                            username=r_user,
+                            password=r_pass,
+                            name=r_name,
+                            email=r_email,
+                            role=role_key,
+                            justification=r_just,
+                            require_approval=True
+                        )
+                        if reg_res["success"]:
+                            log_audit_event("USER_REGISTRATION_SUBMITTED", target="Access Gateway", details=f"New registration requested by '{r_name}' ({r_user}) for [{role_key.upper()}]", status="Pending")
+                            st.success("✅ **Access Request Submitted!**")
+                            st.markdown(f"""
+                            <div style="background: rgba(46, 204, 113, 0.1); border: 1px solid #2ECC71; border-radius: 6px; padding: 0.8rem; margin-top: 0.5rem; font-size: 0.82rem; color: #CBD5E1;">
+                                <strong>Request Details:</strong><br/>
+                                • <strong>Username:</strong> <code>{r_user}</code><br/>
+                                • <strong>Email:</strong> <code>{r_email}</code><br/>
+                                • <strong>Status:</strong> <span style="color:#F5A623; font-weight:700;">Pending SOC Admin Approval</span><br/>
+                                • <em>Please notify Admin Sarah or log in once your approval is granted.</em>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.error(f"❌ {reg_res['message']}")
+
+        # ----------------- 4. Forgot Password Tab -----------------
+        with tab_forgot:
+            st.markdown("""
+            <div style="background: rgba(245, 166, 35, 0.06); border: 1px solid rgba(245, 166, 35, 0.25); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.1rem;">🔄</span>
+                        <strong style="color: #F5A623; font-size: 0.95rem;">Self-Service Password Reset & Account Recovery</strong>
+                    </div>
+                    <span style="font-size: 0.7rem; background: rgba(245, 166, 35, 0.2); color: #F5A623; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 700;">SECURITY TOKEN</span>
+                </div>
+                <div style="color: #CBD5E1; font-size: 0.82rem; line-height: 1.5;">
+                    Generate a secure one-time verification token (valid 15 minutes) to reset your account password and restore locked accounts.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Step 1: Generate Verification Token
+            st.markdown("<div style='font-size: 0.85rem; font-weight: 700; color: #F8FAFC; margin-bottom: 0.4rem;'>Step 1: Request Secure OTP Verification Code</div>", unsafe_allow_html=True)
+            with st.form("form_request_reset_token"):
+                f_identity = st.text_input("Enter Registered Username or Email", value="", placeholder="e.g. analyst or alex.analyst@soc.internal", key="input_reset_id")
+                btn_req_token = st.form_submit_button("Generate & Dispatch Verification OTP 📩", use_container_width=True)
+
+                if btn_req_token:
+                    if not f_identity.strip():
+                        st.error("❌ Please enter your username or email address.")
+                    else:
+                        req_res = request_password_reset(f_identity)
+                        if req_res["success"]:
+                            st.session_state["last_reset_token"] = req_res["token"]
+                            st.session_state["last_reset_user"] = req_res["username"]
+                            log_audit_event("PASSWORD_RESET_TOKEN_GENERATED", target="Security Gateway", details=f"Verification token generated for '{req_res['username']}'", status="Success")
+                            st.success("✅ One-Time Verification Token successfully generated!")
+                        else:
+                            st.error(f"❌ {req_res['message']}")
+
+            # Display simulated offline dispatch if active
+            if "last_reset_token" in st.session_state:
+                st.markdown(f"""
+                <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid #38BDF8; border-radius: 6px; padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.82rem; color: #CBD5E1;">
+                    <div style="color: #38BDF8; font-weight: 700; margin-bottom: 0.2rem;">
+                        📧 SIMULATED SOC SECURE DISPATCH GATEWAY
+                    </div>
+                    <div>A secure one-time token was dispatched for investigator <strong>{st.session_state.get('last_reset_user', '')}</strong>:</div>
+                    <div style="margin-top: 0.4rem; font-size: 1.15rem; font-family: monospace; letter-spacing: 0.15em; color: #F8FAFC; background: #0B1220; padding: 0.35rem 0.65rem; border-radius: 4px; display: inline-block; border: 1px solid #1E293B;">
+                        {st.session_state['last_reset_token']}
+                    </div>
+                    <div style="font-size: 0.72rem; color: #94A3B8; margin-top: 0.3rem;">Token expiration window: 15 minutes. Copy this OTP to complete Step 2 below.</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Step 2: Set New Password
+            st.markdown("<div style='font-size: 0.85rem; font-weight: 700; color: #F8FAFC; margin-top: 1rem; margin-bottom: 0.4rem;'>Step 2: Enter Verification Code & New Password</div>", unsafe_allow_html=True)
+            with st.form("form_submit_new_pass"):
+                reset_user_input = st.text_input("Username or Email", value=st.session_state.get("last_reset_user", ""), key="reset_user_val")
+                reset_token_input = st.text_input("6-Digit Verification OTP Token", value=st.session_state.get("last_reset_token", ""), key="reset_token_val")
+
+                c_np1, c_np2 = st.columns(2)
+                with c_np1:
+                    new_pass = st.text_input("New Password (min 6 chars)", type="password", key="reset_new_pass")
+                with c_np2:
+                    new_pass_conf = st.text_input("Confirm New Password", type="password", key="reset_new_pass_conf")
+
+                btn_apply_pass = st.form_submit_button("Update Password & Restore Access 🔐", use_container_width=True, type="primary")
+
+                if btn_apply_pass:
+                    if not reset_user_input or not reset_token_input or not new_pass:
+                        st.error("❌ Please provide username, token, and new password.")
+                    elif new_pass != new_pass_conf:
+                        st.error("❌ New passwords do not match.")
+                    else:
+                        reset_res = reset_password_with_token(reset_user_input, reset_token_input, new_pass)
+                        if reset_res["success"]:
+                            log_audit_event("PASSWORD_RESET_SUCCESS", target="Security Gateway", details=f"Password successfully reset for '{reset_user_input}'", status="Success")
+                            st.session_state.pop("last_reset_token", None)
+                            st.session_state.pop("last_reset_user", None)
+                            st.success(f"✅ {reset_res['message']}")
+                        else:
+                            st.error(f"❌ {reset_res['message']}")
 
         # ----------------- Fast Demo Access -----------------
         st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)

@@ -25,7 +25,13 @@ from data_layer import (
     log_audit_event,
     get_rbac_matrix,
     simulate_model_retrain,
-    CLASS_COLORS
+    CLASS_COLORS,
+    get_all_users,
+    get_pending_users,
+    approve_user_registration,
+    reject_user_registration,
+    unlock_user_account,
+    admin_reset_password
 )
 from components.badges import (
     render_demo_banner,
@@ -114,10 +120,11 @@ def render_page():
 
     st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-    # 4 Administration Tabs
+    # 5 Administration Tabs
     tabs = st.tabs([
         "⚙️ Dynamic Threshold Tuning",
         "📋 Live SOC Audit Trail",
+        "👥 User Governance & Approvals",
         "🛡️ RBAC Permissions Matrix",
         "🚀 Model Retraining & Lifecycle"
     ])
@@ -267,9 +274,172 @@ def render_page():
         render_demo_tag()
 
     # =========================================================================
-    # TAB 3: RBAC PERMISSIONS MATRIX & PRIVACY POLICIES
+    # =========================================================================
+    # TAB 3: USER GOVERNANCE & APPROVALS (RBAC & IDENTITY LIFECYCLE)
     # =========================================================================
     with tabs[2]:
+        st.markdown("""
+        <div style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC; margin-bottom: 0.2rem;">
+            Investigator Access Governance & Registration Approvals
+        </div>
+        <div style="color: #94A3B8; font-size: 0.8rem; margin-bottom: 1rem;">
+            Review incoming registration requests, remediate brute-force account lockouts, and manage investigator credentials.
+        </div>
+        """, unsafe_allow_html=True)
+
+        pending_list = get_pending_users()
+
+        # Section 1: Pending Access Requests Queue
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+            <div style="font-size: 0.88rem; font-weight: 700; color: #F5A623;">
+                ⏳ PENDING REGISTRATION QUEUE ({len(pending_list)} Requests)
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not pending_list:
+            st.markdown("""
+            <div style="background: rgba(46, 204, 113, 0.08); border: 1px solid rgba(46, 204, 113, 0.25); border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 1rem; color: #CBD5E1; font-size: 0.84rem;">
+                ✅ <strong>Queue Clear:</strong> No pending access requests. All investigator registrations have been processed.
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            for pending_user in pending_list:
+                p_uid = pending_user["id"]
+                p_uname = pending_user["username"]
+                p_name = pending_user["name"]
+                p_email = pending_user["email"]
+                p_role = pending_user["role"].upper()
+                p_just = pending_user.get("justification", "None specified")
+                p_time = pending_user.get("created_at", "")
+
+                col_info, col_actions = st.columns([3, 1.4])
+                with col_info:
+                    st.markdown(f"""
+                    <div style="background: #121A2B; border: 1px solid #1E293B; border-left: 4px solid #F5A623; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <strong style="color: #F8FAFC; font-size: 0.9rem;">{p_name}</strong>
+                                <code style="color: #38BDF8; font-size: 0.8rem; margin-left: 0.4rem;">{p_uname}</code>
+                            </div>
+                            <span style="font-size: 0.68rem; background: rgba(245, 166, 35, 0.2); color: #F5A623; padding: 0.15rem 0.45rem; border-radius: 3px; font-weight: 700;">
+                                REQUESTED: {p_role}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: #94A3B8; margin-top: 0.25rem;">
+                            Email: <code>{p_email}</code> • Submitted: {p_time}
+                        </div>
+                        <div style="font-size: 0.78rem; color: #CBD5E1; margin-top: 0.25rem; font-style: italic;">
+                            Justification: "{p_just}"
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_actions:
+                    c_appr, c_rej = st.columns(2)
+                    with c_appr:
+                        if st.button("🟢 Approve", key=f"btn_appr_{p_uid}", use_container_width=True):
+                            approve_user_registration(p_uid)
+                            log_audit_event("USER_APPROVED_BY_ADMIN", target=p_uname, details=f"Admin Sarah approved registration for '{p_name}' ({p_role})", status="Approved")
+                            st.success(f"Approved {p_uname}!")
+                            time.sleep(0.4)
+                            st.rerun()
+                    with c_rej:
+                        if st.button("🔴 Reject", key=f"btn_rej_{p_uid}", use_container_width=True):
+                            reject_user_registration(p_uid)
+                            log_audit_event("USER_REJECTED_BY_ADMIN", target=p_uname, details=f"Admin Sarah rejected request for '{p_name}'", status="Rejected")
+                            st.warning(f"Rejected {p_uname}")
+                            time.sleep(0.4)
+                            st.rerun()
+
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+        # Section 2: All Users Directory Table
+        st.markdown("""
+        <div style="font-size: 0.88rem; font-weight: 700; color: #F8FAFC; margin-bottom: 0.4rem;">
+            📋 ACTIVE INVESTIGATOR REGISTRY (Persistent SQLite Database)
+        </div>
+        """, unsafe_allow_html=True)
+
+        all_users = get_all_users()
+        users_table_data = []
+        for u in all_users:
+            users_table_data.append({
+                "ID": u["id"],
+                "Username": u["username"],
+                "Name": u["name"],
+                "Email": u["email"],
+                "Role": u["role"].upper(),
+                "Status": u["status"].upper(),
+                "Failed Attempts": u["failed_attempts"],
+                "Account Lockout": "🔒 LOCKED" if u["is_locked"] else "Normal",
+                "Last Login": u["last_login"] or "Never"
+            })
+        st.dataframe(pd.DataFrame(users_table_data), use_container_width=True, hide_index=True)
+
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+        # Section 3: Lockout Remediation & Admin Password Reset
+        st.markdown("""
+        <div class="soc-card">
+            <div class="soc-card-title">
+                <span>ACCOUNT SECURITY REMEDIATION</span>
+                <span style="color: #38BDF8;">Lockout Override & Direct Reset</span>
+            </div>
+            <div style="font-size: 0.82rem; color: #CBD5E1; margin-bottom: 0.8rem;">
+                Select an account to clear failed-attempt locks or directly issue an administrative credential reset:
+            </div>
+        """, unsafe_allow_html=True)
+
+        user_options = {f"{u['username']} ({u['name']} - {u['status']})": u for u in all_users}
+        if user_options:
+            selected_label = st.selectbox("Select Account to Manage:", list(user_options.keys()), key="sel_mgmt_user")
+            target_user = user_options[selected_label]
+            target_uid = target_user["id"]
+            target_uname = target_user["username"]
+
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                st.markdown(f"""
+                <div style="font-size: 0.82rem; color: #CBD5E1; line-height: 1.6;">
+                    • <strong>Status:</strong> <code>{target_user['status']}</code><br/>
+                    • <strong>Failed Attempts:</strong> <code>{target_user['failed_attempts']} / 5</code><br/>
+                    • <strong>Locked Until:</strong> <code>{target_user['locked_until'] or 'None (Unlocked)'}</code>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if target_user["is_locked"] or target_user["failed_attempts"] > 0:
+                    if st.button("🔓 Override & Unlock Account Immediately", type="primary", key="btn_unlock_usr", use_container_width=True):
+                        unlock_user_account(target_uid)
+                        log_audit_event("ADMIN_UNLOCKED_USER", target=target_uname, details=f"Admin Sarah unlocked account '{target_uname}'", status="Success")
+                        st.success(f"✅ Account '{target_uname}' unlocked successfully! Failed attempts reset to 0.")
+                        time.sleep(0.4)
+                        st.rerun()
+                else:
+                    st.caption("✅ Account is currently in good standing.")
+
+            with col_m2:
+                with st.form("form_admin_reset_pass"):
+                    new_admin_pwd = st.text_input("Issue New Password", value="analyst123", type="password", key="adm_new_pwd")
+                    submit_pwd_reset = st.form_submit_button("🔑 Reset User Password", use_container_width=True)
+
+                    if submit_pwd_reset:
+                        if len(new_admin_pwd.strip()) < 6:
+                            st.error("❌ Password must be at least 6 characters.")
+                        else:
+                            admin_reset_password(target_uid, new_admin_pwd)
+                            log_audit_event("ADMIN_PASSWORD_RESET", target=target_uname, details=f"Admin Sarah issued password reset for '{target_uname}'", status="Success")
+                            st.success(f"✅ Password for '{target_uname}' has been updated.")
+                            time.sleep(0.4)
+                            st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        render_demo_tag()
+
+    # =========================================================================
+    # TAB 4: RBAC PERMISSIONS MATRIX & PRIVACY POLICIES
+    # =========================================================================
+    with tabs[3]:
         st.markdown("""
         <div style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC; margin-bottom: 0.2rem;">
             Role-Based Access Control (RBAC) Governance Matrix
@@ -323,9 +493,10 @@ def render_page():
         """, unsafe_allow_html=True)
 
     # =========================================================================
-    # TAB 4: MODEL RETRAINING & LIFECYCLE
     # =========================================================================
-    with tabs[3]:
+    # TAB 5: MODEL RETRAINING & LIFECYCLE
+    # =========================================================================
+    with tabs[4]:
         st.markdown("""
         <div style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC; margin-bottom: 0.2rem;">
             ML Model Lifecycle, Drift Monitoring & Automated Retraining

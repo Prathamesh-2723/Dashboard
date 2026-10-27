@@ -891,73 +891,86 @@ def run_mock_pcap_pipeline(file_name: str, window_size: int = 30, min_flows: int
 # =============================================================================
 # 9. SECURITY AUDIT LOGGING & GOVERNANCE
 # =============================================================================
+_FALLBACK_AUDIT_LOGS = []
+
 def get_audit_logs() -> List[Dict[str, Any]]:
     """
     Returns the chronological audit trail of all analyst and admin actions.
     Persisted within the session state for compliance inspection.
     """
-    if "soc_audit_logs" not in st.session_state:
-        st.session_state["soc_audit_logs"] = [
-            {
-                "timestamp": "2026-10-26 15:42:10",
-                "user": "Analyst Alex",
-                "role": "User (Analyst)",
-                "action": "Investigated Session",
-                "target": "SES-AGE-01",
-                "status": "Success",
-                "details": "Viewed TreeSHAP attributions and behavioral features"
-            },
-            {
-                "timestamp": "2026-10-26 16:04:22",
-                "user": "Analyst Alex",
-                "role": "User (Analyst)",
-                "action": "Exported Threat Report",
-                "target": "SES-HUM-01",
-                "status": "Success",
-                "details": "Downloaded HTML audit report"
-            },
-            {
-                "timestamp": "2026-10-26 16:30:15",
-                "user": "Admin Sarah",
-                "role": "Admin",
-                "action": "Threshold Update",
-                "target": "UNCERTAINTY_THRESHOLD",
-                "status": "Updated",
-                "details": "Tuned boundary from 0.60 to 0.65"
-            },
-            {
-                "timestamp": "2026-10-26 16:45:00",
-                "user": "Admin Sarah",
-                "role": "Admin",
-                "action": "Evasion Simulation",
-                "target": "Playwright Agent",
-                "status": "Simulated",
-                "details": "Injected 0.35 jitter; measured explanation stability drop"
-            }
-        ]
-    return st.session_state["soc_audit_logs"]
+    try:
+        if "soc_audit_logs" not in st.session_state:
+            st.session_state["soc_audit_logs"] = [
+                {
+                    "timestamp": "2026-10-26 15:42:10",
+                    "user": "Analyst Alex",
+                    "role": "User (Analyst)",
+                    "action": "Investigated Session",
+                    "target": "SES-AGE-01",
+                    "status": "Success",
+                    "details": "Viewed TreeSHAP attributions and behavioral features"
+                },
+                {
+                    "timestamp": "2026-10-26 16:04:22",
+                    "user": "Analyst Alex",
+                    "role": "User (Analyst)",
+                    "action": "Exported Threat Report",
+                    "target": "SES-HUM-01",
+                    "status": "Success",
+                    "details": "Downloaded HTML audit report"
+                },
+                {
+                    "timestamp": "2026-10-26 16:30:15",
+                    "user": "Admin Sarah",
+                    "role": "Admin",
+                    "action": "Threshold Update",
+                    "target": "UNCERTAINTY_THRESHOLD",
+                    "status": "Updated",
+                    "details": "Tuned boundary from 0.60 to 0.65"
+                },
+                {
+                    "timestamp": "2026-10-26 16:45:00",
+                    "user": "Admin Sarah",
+                    "role": "Admin",
+                    "action": "Evasion Simulation",
+                    "target": "Playwright Agent",
+                    "status": "Simulated",
+                    "details": "Injected 0.35 jitter; measured explanation stability drop"
+                }
+            ]
+        return st.session_state["soc_audit_logs"]
+    except Exception:
+        return _FALLBACK_AUDIT_LOGS
 
 
 def log_audit_event(action: str, target: str, details: str = "", status: str = "Success"):
     """Records a new event to the active SOC security audit log."""
-    logs = get_audit_logs()
-    role = st.session_state.get("user_role", "analyst")
-    user = "Admin Sarah" if role == "admin" else st.session_state.get("user_name", "Analyst Alex")
-    
     from datetime import datetime
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    try:
+        logs = get_audit_logs()
+        role = st.session_state.get("user_role", "analyst")
+        user = "Admin Sarah" if role == "admin" else st.session_state.get("user_name", "Analyst Alex")
+    except Exception:
+        logs = _FALLBACK_AUDIT_LOGS
+        role = "system"
+        user = "System Operator"
     
     event = {
         "timestamp": now_str,
         "user": user,
-        "role": "Admin" if role == "admin" else "User (Analyst)",
+        "role": "Admin" if role == "admin" else ("User (Analyst)" if role == "analyst" else "System"),
         "action": action,
         "target": target,
         "status": status,
         "details": details
     }
     logs.insert(0, event)
-    st.session_state["soc_audit_logs"] = logs[:100]
+    try:
+        st.session_state["soc_audit_logs"] = logs[:100]
+    except Exception:
+        pass
 
 
 def get_rbac_matrix() -> pd.DataFrame:
@@ -1041,13 +1054,54 @@ def simulate_model_retrain() -> Dict[str, Any]:
 
 
 # =============================================================================
-# 13. SOC Authentication & User Profile Directory (RBAC)
+# 13. SOC Authentication & User Profile Directory (RBAC & Persistent DB)
 # =============================================================================
 
-USER_PROFILES: Dict[str, Dict[str, Any]] = {
+from auth_db import (
+    authenticate_user_detailed,
+    authenticate_user,
+    get_user_profile,
+    register_user,
+    approve_user_registration,
+    reject_user_registration,
+    unlock_user_account,
+    request_password_reset,
+    reset_password_with_token,
+    admin_reset_password,
+    get_all_users,
+    get_pending_users,
+    hash_password,
+    verify_password
+)
+
+class _UserProfileProxy(dict):
+    """
+    Backwards-compatible dynamic proxy for USER_PROFILES.
+    Allows fastpass demo access and dictionary subscripting while
+    resolving directly from the persistent SQLite database.
+    """
+    def __getitem__(self, key: str) -> Dict[str, Any]:
+        profile = get_user_profile(key)
+        if profile:
+            return profile
+        return super().__getitem__(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        profile = get_user_profile(key)
+        if profile:
+            return profile
+        return super().get(key, default)
+
+    def values(self):
+        return get_all_users()
+
+    def items(self):
+        return [(u["username"], u) for u in get_all_users()]
+
+
+USER_PROFILES = _UserProfileProxy({
     "analyst": {
         "username": "analyst",
-        "password": "analyst123",
         "name": "Analyst Alex",
         "role": "analyst",
         "title": "Tier-2 SOC Analyst",
@@ -1059,7 +1113,6 @@ USER_PROFILES: Dict[str, Dict[str, Any]] = {
     },
     "admin": {
         "username": "admin",
-        "password": "admin123",
         "name": "Admin Sarah",
         "role": "admin",
         "title": "Lead Security / ML Engineer",
@@ -1069,34 +1122,6 @@ USER_PROFILES: Dict[str, Dict[str, Any]] = {
         "color": "#F5A623",
         "accessible_pages": 11
     }
-}
-
-
-def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
-    """
-    Validates user credentials against the local SOC directory.
-    Returns the user profile dict if valid, or None if invalid.
-    """
-    if not username or not password:
-        return None
-    
-    clean_user = str(username).strip().lower()
-    clean_pwd = str(password).strip()
-
-    for key, profile in USER_PROFILES.items():
-        if profile["username"] == clean_user and profile["password"] == clean_pwd:
-            return profile
-    return None
-
-
-def get_user_profile(role_or_username: str) -> Optional[Dict[str, Any]]:
-    """Retrieves profile details by username or role key."""
-    key = str(role_or_username).strip().lower()
-    if key in USER_PROFILES:
-        return USER_PROFILES[key]
-    for profile in USER_PROFILES.values():
-        if profile["username"] == key:
-            return profile
-    return None
+})
 
 
