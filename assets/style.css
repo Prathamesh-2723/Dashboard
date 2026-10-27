@@ -1,0 +1,351 @@
+/* ==============================================================================
+   Explainable AI for Network Security & Threat Investigation
+   Dark "Security Operations" Theme Stylesheet
+   Palette:
+     Background: #0B1220
+     Cards:      #121A2B
+     Borders:    #1E293B / #2A374D
+     Text:       #F8FAFC (primary), #E2E8F0 (body), #94A3B8 (muted)
+     HUMAN:      #2ECC71 (green)
+     BOT:        #F5A623 (amber)
+     AI-AGENT:   #8B5CF6 (violet)
+   ============================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-primary: #0B1220;
+  --bg-surface: #121A2B;
+  --bg-surface-hover: #1A253D;
+  --border-subtle: #1E293B;
+  --border-active: #334155;
+  --text-primary: #F8FAFC;
+  --text-secondary: #E2E8F0;
+  --text-muted: #94A3B8;
+  --color-human: #2ECC71;
+  --color-bot: #F5A623;
+  --color-agent: #8B5CF6;
+  --color-uncertain: #64748B;
+  --color-cyan: #38BDF8;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* Base application styling */
+html, body, [data-testid="stAppViewContainer"] {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+[data-testid="stHeader"] {
+  background-color: rgba(11, 18, 32, 0.85) !important;
+  backdrop-filter: blur(8px);
+}
+
+[data-testid="stSidebar"] {
+  background-color: #080D17 !important;
+  border-right: 1px solid var(--border-subtle) !important;
+}
+
+/* Sidebar headers and navigation */
+.sidebar-brand {
+  padding: 1.25rem 0.75rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 1rem;
+}
+
+.sidebar-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebar-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  line-height: 1.3;
+}
+
+.sidebar-version-badge {
+  display: inline-block;
+  margin-top: 0.6rem;
+  padding: 0.2rem 0.55rem;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: #C4B5FD;
+}
+
+/* Permanent DEMO MODE Banner */
+.demo-banner {
+  background: linear-gradient(90deg, rgba(245, 166, 35, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
+  border: 1px solid rgba(245, 166, 35, 0.35);
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.demo-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #F8FAFC;
+  letter-spacing: 0.02em;
+}
+
+.demo-badge-pill {
+  background: #F5A623;
+  color: #0B1220;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.demo-banner-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Small demo tag under charts and cards */
+.demo-tag {
+  font-size: 0.68rem;
+  color: #64748B;
+  font-family: var(--font-mono);
+  margin-top: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.demo-tag::before {
+  content: "•";
+  color: #F5A623;
+}
+
+/* Card Surfaces */
+.soc-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 1.15rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.soc-card:hover {
+  border-color: var(--border-active);
+}
+
+.soc-card-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.soc-kpi-val {
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.1;
+}
+
+.soc-kpi-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+/* Verdict Badges & Cards */
+.verdict-human {
+  color: var(--color-human);
+  border-color: rgba(46, 204, 113, 0.4);
+  background: rgba(46, 204, 113, 0.08);
+}
+
+.verdict-bot {
+  color: var(--color-bot);
+  border-color: rgba(245, 166, 35, 0.4);
+  background: rgba(245, 166, 35, 0.08);
+}
+
+.verdict-agent {
+  color: var(--color-agent);
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.verdict-uncertain {
+  color: var(--text-muted);
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+}
+
+/* Pipeline Status Health Strip */
+.pipeline-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.pipeline-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  background: #0B1220;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.pipeline-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.pipeline-dot-ok {
+  background-color: var(--color-human);
+  box-shadow: 0 0 6px rgba(46, 204, 113, 0.6);
+}
+
+.pipeline-dot-warn {
+  background-color: var(--color-bot);
+  box-shadow: 0 0 6px rgba(245, 166, 35, 0.6);
+}
+
+.pipeline-arrow {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Behavioral Explanation Box */
+.explanation-box {
+  background-color: #0E1626;
+  border-left: 3px solid var(--color-agent);
+  padding: 0.85rem 1rem;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 0.65rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* Grounded badge & Source cards for RAG */
+.grounded-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--color-cyan);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mitre-card {
+  background: #090F1B;
+  border: 1px solid #1E293B;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.mitre-header {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: #38BDF8;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+/* Streamlit component tweaks for dark theme consistency */
+[data-testid="stMetricValue"] {
+  color: var(--text-primary) !important;
+  font-size: 1.6rem !important;
+  font-weight: 700 !important;
+}
+
+[data-testid="stMetricLabel"] {
+  color: var(--text-muted) !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+}
+
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+  gap: 8px;
+  background-color: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.stTabs [data-baseweb="tab"] {
+  background-color: transparent !important;
+  color: var(--text-muted) !important;
+  border-radius: 6px 6px 0 0 !important;
+  padding: 0.5rem 1rem !important;
+  font-weight: 500;
+}
+
+.stTabs [aria-selected="true"] {
+  color: var(--text-primary) !important;
+  border-bottom: 2px solid var(--color-agent) !important;
+  background-color: rgba(139, 92, 246, 0.08) !important;
+}
