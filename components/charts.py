@@ -415,3 +415,183 @@ def plot_cross_network_bar(cross_df: pd.DataFrame) -> go.Figure:
     ))
     fig.update_yaxes(title="Macro F1-Score (%)", range=[70, 100])
     return apply_soc_theme(fig, "Cross-Network Environment Generalization")
+
+
+def plot_3d_threat_topology_graph(
+    topology_data: Dict[str, Any],
+    show_edges: bool = True,
+    show_flows: Optional[bool] = None,
+    title: str = "3D Attack Surface Threat Topology",
+    height: int = 700
+) -> go.Figure:
+    """
+    Renders an interactive 3D WebGL network graph using Plotly Scatter3d.
+    Displays Gateway core, Client endpoint sphere, and Destination target constellation,
+    connected by color-coded volumetric packet flow trajectories.
+    """
+    if show_flows is not None:
+        show_edges = show_flows
+
+    fig = go.Figure()
+    
+    # 1. Flow Edges (Trajectories)
+    if show_edges and topology_data.get("edges"):
+        for cls, cls_color in [("HUMAN", "#2ECC71"), ("BOT", "#F5A623"), ("AI-AGENT", "#8B5CF6")]:
+            cls_edges = [e for e in topology_data["edges"] if e["class"] == cls]
+            if not cls_edges:
+                continue
+                
+            x_lines = []
+            y_lines = []
+            z_lines = []
+            
+            for e in cls_edges:
+                x_lines.extend([e["x0"], e["x1"], None])
+                y_lines.extend([e["y0"], e["y1"], None])
+                z_lines.extend([e["z0"], e["z1"], None])
+                
+            fig.add_trace(go.Scatter3d(
+                x=x_lines,
+                y=y_lines,
+                z=z_lines,
+                mode="lines",
+                name=f"{cls} Trajectories ({len(cls_edges)})",
+                line=dict(
+                    color=cls_color,
+                    width=2.5 if cls == "AI-AGENT" else 1.8
+                ),
+                opacity=0.45 if cls == "HUMAN" else (0.65 if cls == "BOT" else 0.85),
+                hoverinfo="none"
+            ))
+
+    # 2. Node Traces (Grouped by Category for distinct rendering)
+    nodes = topology_data.get("nodes", [])
+    
+    # 2a. Gateway Node
+    gw_nodes = [n for n in nodes if n["type"] == "GATEWAY"]
+    if gw_nodes:
+        fig.add_trace(go.Scatter3d(
+            x=[n["x"] for n in gw_nodes],
+            y=[n["y"] for n in gw_nodes],
+            z=[n["z"] for n in gw_nodes],
+            mode="markers+text",
+            name="SOC Ingress Gateway",
+            text=[n["name"] for n in gw_nodes],
+            textposition="top center",
+            textfont=dict(color="#38BDF8", size=11, family="Inter, sans-serif"),
+            marker=dict(
+                symbol="diamond",
+                size=[n["size"] for n in gw_nodes],
+                color=[n["color"] for n in gw_nodes],
+                line=dict(color="#FFFFFF", width=2),
+                opacity=1.0
+            ),
+            hovertext=[f"<b>{n['name']}</b><br>Type: {n['type']}<br>IP: {n['ip']}<br>{n['details']}" for n in gw_nodes],
+            hoverinfo="text"
+        ))
+        
+    # 2b. Client Endpoint Nodes (Grouped by Class)
+    client_nodes = [n for n in nodes if n["type"] == "CLIENT"]
+    for cls in ["HUMAN", "BOT", "AI-AGENT"]:
+        c_sub = [n for n in client_nodes if n["class"] == cls]
+        if not c_sub:
+            continue
+        fig.add_trace(go.Scatter3d(
+            x=[n["x"] for n in c_sub],
+            y=[n["y"] for n in c_sub],
+            z=[n["z"] for n in c_sub],
+            mode="markers",
+            name=f"Client Endpoints: {cls} ({len(c_sub)})",
+            marker=dict(
+                symbol="circle",
+                size=[n["size"] for n in c_sub],
+                color=[n["color"] for n in c_sub],
+                line=dict(color="#0B1220", width=1.5),
+                opacity=0.9
+            ),
+            hovertext=[f"<b>{n['name']}</b><br>Threat Verdict: <b>{n['class']}</b><br>{n['details']}" for n in c_sub],
+            hoverinfo="text"
+        ))
+
+    # 2c. External Target Destination Nodes
+    dst_nodes = [n for n in nodes if n["type"] == "DESTINATION"]
+    for cls in ["HUMAN", "BOT", "AI-AGENT"]:
+        d_sub = [n for n in dst_nodes if n["class"] == cls]
+        if not d_sub:
+            continue
+        fig.add_trace(go.Scatter3d(
+            x=[n["x"] for n in d_sub],
+            y=[n["y"] for n in d_sub],
+            z=[n["z"] for n in d_sub],
+            mode="markers+text",
+            name=f"Destination Targets: {cls} ({len(d_sub)})",
+            text=[n["name"].split(".")[0] for n in d_sub],
+            textposition="top center",
+            textfont=dict(color="#E2E8F0", size=9, family="Inter, sans-serif"),
+            marker=dict(
+                symbol="square",
+                size=[n["size"] for n in d_sub],
+                color=[n["color"] for n in d_sub],
+                line=dict(color="#F8FAFC", width=1),
+                opacity=0.95
+            ),
+            hovertext=[f"<b>{n['name']}</b><br>Category: {n.get('category')}<br>Dominant Traffic: <b>{n['class']}</b><br>Risk: {n.get('risk')}<br>ATT&CK: {n.get('mitre')}" for n in d_sub],
+            hoverinfo="text"
+        ))
+
+    # 3. 3D Scene Styling (Dark Deep-Space SOC Aesthetics)
+    fig.update_layout(
+        height=height,
+        title=dict(
+            text=f"<b>{title}</b>",
+            font=dict(size=15, color="#F8FAFC", family="Inter, sans-serif"),
+            x=0.02,
+            y=0.97
+        ),
+        paper_bgcolor="rgba(11, 18, 32, 0.95)",
+        scene=dict(
+            bgcolor="rgba(11, 18, 32, 0.95)",
+            xaxis=dict(
+                title="",
+                showgrid=True,
+                gridcolor="#1E293B",
+                zerolinecolor="#334155",
+                showbackground=True,
+                backgroundcolor="rgba(18, 26, 43, 0.4)",
+                showticklabels=False
+            ),
+            yaxis=dict(
+                title="",
+                showgrid=True,
+                gridcolor="#1E293B",
+                zerolinecolor="#334155",
+                showbackground=True,
+                backgroundcolor="rgba(18, 26, 43, 0.4)",
+                showticklabels=False
+            ),
+            zaxis=dict(
+                title="",
+                showgrid=True,
+                gridcolor="#1E293B",
+                zerolinecolor="#334155",
+                showbackground=True,
+                backgroundcolor="rgba(18, 26, 43, 0.4)",
+                showticklabels=False
+            ),
+            camera=dict(
+                eye=dict(x=1.65, y=1.65, z=1.2),
+                center=dict(x=0, y=0, z=0)
+            )
+        ),
+        margin=dict(l=0, r=0, t=35, b=0),
+        legend=dict(
+            font=dict(color="#E2E8F0", size=11),
+            bgcolor="rgba(18, 26, 43, 0.75)",
+            bordercolor="#1E293B",
+            borderwidth=1,
+            x=0.01,
+            y=0.05
+        )
+    )
+    return fig
+

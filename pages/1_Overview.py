@@ -106,6 +106,27 @@ def render_page():
 
     st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
 
+    # 3D Threat Topology Feature Spotlight Banner
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(139, 92, 246, 0.12) 100%); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <div style="font-size: 1rem; font-weight: 700; color: #F8FAFC; display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">🌐</span> Interactive 3D Threat Graph & Attack Surface Topology
+                <span style="background: rgba(139, 92, 246, 0.25); color: #C4B5FD; border: 1px solid rgba(139, 92, 246, 0.5); font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; text-transform: uppercase;">WebGL 3D Engine</span>
+            </div>
+            <div style="font-size: 0.82rem; color: #94A3B8; margin-top: 0.25rem;">
+                Force-directed network topology: Ingress Gateway &rarr; RFC Client Subnets &rarr; Outer Resolved Web Endpoints, CDNs & LLM Backends.
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_topo_btn, _ = st.columns([1, 2])
+    with col_topo_btn:
+        st.page_link("pages/12_Threat_Topology_3D.py", label="Launch 3D Threat Topology Visualizer →", icon="🌐")
+
+    st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+
     # Recent Investigations Table
     st.markdown("""
     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.5rem;">

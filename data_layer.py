@@ -1054,6 +1054,237 @@ def simulate_model_retrain() -> Dict[str, Any]:
 
 
 # =============================================================================
+# 12. 3D THREAT TOPOLOGY & ATTACK SURFACE MODEL
+# =============================================================================
+
+TOPOLOGY_DESTINATIONS: List[Dict[str, Any]] = [
+    # AI-Agent targets
+    {"id": "dst_openai", "domain": "api.openai.com", "label": "OpenAI LLM Inference API", "category": "LLM Backend", "class": "AI-AGENT", "risk": "High", "mitre": "T1071.001", "port": 443},
+    {"id": "dst_anthropic", "domain": "api.anthropic.com", "label": "Claude Agent Reasoning API", "category": "LLM Backend", "class": "AI-AGENT", "risk": "High", "mitre": "T1071.001", "port": 443},
+    {"id": "dst_browserless", "domain": "cluster.browserless.io", "label": "Headless Playwright Runner", "category": "Automation Fleet", "class": "AI-AGENT", "risk": "Critical", "mitre": "T1059.007", "port": 443},
+    {"id": "dst_booking", "domain": "travel-booking.example.com", "label": "Dynamic DOM Flight Booking", "category": "Web SPA Target", "class": "AI-AGENT", "risk": "Medium", "mitre": "T1595.002", "port": 443},
+    {"id": "dst_checkout", "domain": "checkout.e-commerce.example.com", "label": "Payment Gateway Target", "category": "Financial Target", "class": "AI-AGENT", "risk": "Critical", "mitre": "T1020", "port": 443},
+    
+    # Bot targets
+    {"id": "dst_pricing", "domain": "pricing-feed.example.com", "label": "Competitor Catalog Scraper", "category": "Scraped Target", "class": "BOT", "risk": "Medium", "mitre": "T1595.002", "port": 443},
+    {"id": "dst_search", "domain": "internal-search.example.com", "label": "Elastic Search Query Endpoint", "category": "Data Harvesting", "class": "BOT", "risk": "Low", "mitre": "T1595.002", "port": 9200},
+    {"id": "dst_auth", "domain": "sso.internal-login.com", "label": "OAuth Auth Credential Target", "category": "Credential Target", "class": "BOT", "risk": "High", "mitre": "T1110.001", "port": 443},
+    {"id": "dst_metrics", "domain": "telemetry-poll.example.com", "label": "Periodic Scripted Poller", "category": "Automated Poller", "class": "BOT", "risk": "Low", "mitre": "T1071.001", "port": 8080},
+    
+    # Human targets
+    {"id": "dst_media", "domain": "video-cdn.example.com", "label": "High-Definition Video Stream", "category": "Rich Media CDN", "class": "HUMAN", "risk": "Low", "mitre": "N/A", "port": 443},
+    {"id": "dst_docs", "domain": "collaborate-docs.example.com", "label": "Interactive Workspace Suite", "category": "Productivity", "class": "HUMAN", "risk": "Low", "mitre": "N/A", "port": 443},
+    {"id": "dst_news", "domain": "news-portal.example.com", "label": "Editorial Content & Media", "category": "Organic Browsing", "class": "HUMAN", "risk": "Low", "mitre": "N/A", "port": 443},
+    {"id": "dst_cdn", "domain": "static-assets.cloudflare.net", "label": "Cloudflare Global CDN Edge", "category": "Static CDN", "class": "HUMAN", "risk": "Low", "mitre": "N/A", "port": 443},
+    {"id": "dst_mail", "domain": "webmail-enterprise.example.com", "label": "Corporate Webmail Service", "category": "Communication", "class": "HUMAN", "risk": "Low", "mitre": "N/A", "port": 443},
+]
+
+
+def get_threat_topology_data(class_filter: Optional[str] = None, min_confidence: float = 0.50, layout_mode: str = "orbital") -> Dict[str, Any]:
+    """
+    Constructs the 3D threat topology graph data containing nodes, coordinates,
+    edges, bandwidth weights, and behavioral metadata.
+    """
+    sessions_df = get_session_summaries()
+    
+    # Filter by confidence
+    valid_sessions = sessions_df[sessions_df["confidence"] >= min_confidence]
+    if class_filter and class_filter.upper() in ["HUMAN", "BOT", "AI-AGENT"]:
+        valid_sessions = valid_sessions[valid_sessions["predicted_class"] == class_filter.upper()]
+        
+    unique_clients = valid_sessions["client_ip"].unique().tolist()
+    
+    nodes = []
+    edges = []
+    
+    # 1. Central Gateway Node
+    nodes.append({
+        "id": "gateway_core",
+        "name": "SOC Gateway Core",
+        "ip": "198.51.100.1",
+        "type": "GATEWAY",
+        "class": "INFRA",
+        "color": "#38BDF8",
+        "size": 18,
+        "symbol": "diamond",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "details": "Central Ingress Router • RFC 5737 Test Space • NetFlow Sensor Edge"
+    })
+    
+    # 2. Client Nodes (Inner Shell / Subnets)
+    n_clients = len(unique_clients)
+    client_coords = {}
+    
+    for idx, client_ip in enumerate(unique_clients):
+        # Identify dominant class of this client
+        c_sessions = valid_sessions[valid_sessions["client_ip"] == client_ip]
+        dom_class = c_sessions["predicted_class"].mode()[0] if len(c_sessions) > 0 else "HUMAN"
+        total_vol = c_sessions["total_bytes"].sum() / (1024 * 1024)
+        avg_conc = float(c_sessions["avg_concurrency"].mean())
+        avg_ent = float(c_sessions["avg_entropy"].mean())
+        avg_burst = float(c_sessions["avg_burstiness"].mean())
+        
+        # Subnet classification
+        last_octet = int(client_ip.split(".")[-1])
+        if last_octet < 20:
+            subnet_name = "Corporate Workstations (203.0.113.0/26)"
+            cluster_offset_x = -9.0
+        elif last_octet < 30:
+            subnet_name = "DevOps & Automation CI/CD (203.0.113.64/26)"
+            cluster_offset_x = 0.0
+        else:
+            subnet_name = "AI Agent Testing Pods (203.0.113.128/26)"
+            cluster_offset_x = 9.0
+            
+        if layout_mode == "orbital":
+            # Golden ratio spiral on sphere of radius R1 = 5.2
+            r1 = 5.2
+            phi = np.arccos(1.0 - 2.0 * (idx + 0.5) / max(1, n_clients))
+            theta = np.pi * (1.0 + 5.0 ** 0.5) * idx
+            cx = float(r1 * np.sin(phi) * np.cos(theta))
+            cy = float(r1 * np.sin(phi) * np.sin(theta))
+            cz = float(r1 * np.cos(phi))
+        elif layout_mode == "helix":
+            # Behavioral feature coordinates
+            theta = avg_burst * 2.0 * np.pi
+            rad = np.clip(avg_conc * 0.45, 2.0, 8.0)
+            cx = float(rad * np.cos(theta))
+            cy = float(rad * np.sin(theta))
+            cz = float((avg_ent - 2.5) * 4.0)
+        else:  # subnet clusters
+            angle = (idx / max(1, n_clients)) * 2.0 * np.pi
+            r_sub = 3.2
+            cx = float(cluster_offset_x + r_sub * np.cos(angle))
+            cy = float(r_sub * np.sin(angle))
+            cz = float(np.sin(angle * 2.0) * 2.0)
+
+        client_coords[client_ip] = (cx, cy, cz)
+        masked_ip = format_ip(client_ip)
+        
+        nodes.append({
+            "id": f"client_{client_ip}",
+            "name": f"Client {masked_ip}",
+            "ip": masked_ip,
+            "raw_ip": client_ip,
+            "type": "CLIENT",
+            "class": dom_class,
+            "subnet": subnet_name,
+            "color": CLASS_COLORS.get(dom_class, "#94A3B8"),
+            "size": int(np.clip(9 + int(avg_conc * 0.4), 9, 16)),
+            "symbol": "circle",
+            "x": cx,
+            "y": cy,
+            "z": cz,
+            "details": f"Subnet: {subnet_name} | Sessions: {len(c_sessions)} | Volume: {total_vol:.1f} MB | Entropy: {avg_ent:.2f}"
+        })
+
+    # 3. Destination Nodes (Outer Shell)
+    active_dsts = TOPOLOGY_DESTINATIONS
+    if class_filter and class_filter.upper() in ["HUMAN", "BOT", "AI-AGENT"]:
+        active_dsts = [d for d in TOPOLOGY_DESTINATIONS if d["class"] == class_filter.upper()]
+
+    n_dst = len(active_dsts)
+    dst_coords = {}
+    
+    for d_idx, dst in enumerate(active_dsts):
+        d_cls = dst["class"]
+        
+        if layout_mode == "orbital":
+            r2 = 12.0
+            phi = np.arccos(1.0 - 2.0 * (d_idx + 0.5) / max(1, n_dst))
+            theta = np.pi * (1.0 + 5.0 ** 0.5) * d_idx + np.pi/4.0
+            dx = float(r2 * np.sin(phi) * np.cos(theta))
+            dy = float(r2 * np.sin(phi) * np.sin(theta))
+            dz = float(r2 * np.cos(phi))
+        elif layout_mode == "helix":
+            angle = (d_idx / max(1, n_dst)) * 2.0 * np.pi
+            dx = float(12.0 * np.cos(angle))
+            dy = float(12.0 * np.sin(angle))
+            dz = 0.0 if d_cls == "HUMAN" else (3.5 if d_cls == "BOT" else -3.5)
+        else:  # subnet clusters
+            if d_cls == "HUMAN":
+                base_x = -9.0
+            elif d_cls == "BOT":
+                base_x = 0.0
+            else:
+                base_x = 9.0
+            angle = (d_idx / max(1, n_dst)) * 2.0 * np.pi
+            dx = float(base_x + 5.5 * np.cos(angle))
+            dy = float(5.5 * np.sin(angle))
+            dz = float(np.cos(angle * 2.0) * 3.5)
+
+        dst_coords[dst["id"]] = (dx, dy, dz)
+        
+        nodes.append({
+            "id": dst["id"],
+            "name": dst["domain"],
+            "ip": dst["domain"],
+            "raw_ip": dst["domain"],
+            "type": "DESTINATION",
+            "class": d_cls,
+            "category": dst["category"],
+            "risk": dst["risk"],
+            "mitre": dst["mitre"],
+            "color": CLASS_COLORS.get(d_cls, "#94A3B8"),
+            "size": 13,
+            "symbol": "square",
+            "x": dx,
+            "y": dy,
+            "z": dz,
+            "details": f"Target: {dst['label']} ({dst['category']}) | Risk: {dst['risk']} | ATT&CK: {dst['mitre']}"
+        })
+
+    # 4. Synthesize Flow Edges between Clients and Destinations
+    for _, sess in valid_sessions.iterrows():
+        c_ip = sess["client_ip"]
+        s_cls = sess["predicted_class"]
+        
+        if c_ip not in client_coords:
+            continue
+            
+        matching_dsts = [d for d in active_dsts if d["class"] == s_cls]
+        if not matching_dsts:
+            matching_dsts = active_dsts
+            
+        if not matching_dsts:
+            continue
+            
+        dst_choice = matching_dsts[hash(sess["session_id"]) % len(matching_dsts)]
+        d_id = dst_choice["id"]
+        
+        if d_id not in dst_coords:
+            continue
+            
+        c_pos = client_coords[c_ip]
+        d_pos = dst_coords[d_id]
+        vol_mb = float(sess["total_bytes"] / (1024 * 1024))
+        
+        edges.append({
+            "session_id": sess["session_id"],
+            "source_ip": format_ip(c_ip),
+            "target_domain": dst_choice["domain"],
+            "class": s_cls,
+            "color": CLASS_COLORS.get(s_cls, "#94A3B8"),
+            "volume_mb": vol_mb,
+            "concurrency": float(sess["avg_concurrency"]),
+            "confidence": float(sess["confidence"]),
+            "x0": c_pos[0], "y0": c_pos[1], "z0": c_pos[2],
+            "x1": d_pos[0], "y1": d_pos[1], "z1": d_pos[2]
+        })
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "destinations": active_dsts,
+        "total_clients": len(unique_clients),
+        "total_destinations": len(active_dsts),
+        "total_edges": len(edges)
+    }
+
+
+# =============================================================================
 # 13. SOC Authentication & User Profile Directory (RBAC & Persistent DB)
 # =============================================================================
 

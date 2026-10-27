@@ -131,6 +131,7 @@ def render_page():
             <div class="demo-tag" style="margin-top: 0.8rem;">session metadata log</div>
         </div>
         """, unsafe_allow_html=True)
+        st.page_link("pages/12_Threat_Topology_3D.py", label="Inspect in 3D Threat Graph →", icon="🌐")
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 

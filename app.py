@@ -463,9 +463,10 @@ else:
 
     # 5.2 Dynamic Role-Based Multi-Page Navigation Structure
     if active_role == "admin":
-        # Admin Profile: Full unrestricted access to all 11 pages
+        # Admin Profile: Full unrestricted access to all 12 pages
         pages = [
             st.Page("pages/1_Overview.py", title="Command Center", icon="📊"),
+            st.Page("pages/12_Threat_Topology_3D.py", title="3D Threat Topology", icon="🌐"),
             st.Page("pages/2_Upload_and_Analyze.py", title="Upload & Analyze", icon="📁"),
             st.Page("pages/3_Session_Investigation.py", title="Session Investigation", icon="🔍"),
             st.Page("pages/4_Explainability.py", title="Explainability & SHAP", icon="🔬"),
@@ -481,6 +482,7 @@ else:
         # User (Analyst) Profile: Focused operational triage, explanations & reporting (Sensitive ML internals hidden)
         pages = [
             st.Page("pages/1_Overview.py", title="Command Center", icon="📊"),
+            st.Page("pages/12_Threat_Topology_3D.py", title="3D Threat Topology", icon="🌐"),
             st.Page("pages/2_Upload_and_Analyze.py", title="Upload & Analyze", icon="📁"),
             st.Page("pages/3_Session_Investigation.py", title="Session Investigation", icon="🔍"),
             st.Page("pages/4_Explainability.py", title="Explainability & SHAP", icon="🔬"),
